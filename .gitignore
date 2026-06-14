@@ -1,5 +1,8 @@
 node_modules/
 .env
+token.txt
+state.json
+state.json.tmp
 *.log
-*.json
-!package.json
+logs/
+wallet.json
