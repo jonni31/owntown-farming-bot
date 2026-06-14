@@ -174,22 +174,31 @@ if (cfg.state.resume) {
 // REST API (with fingerprint headers)
 // ════════════════════════════════════════════
 
-function apiRequest(method, path, body, token) {
+function apiRequest(method, path, body, token, { timeoutMs = 15000 } = {}) {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : null;
     const headers = H.getHeaders(token);
     if (data) headers['Content-Length'] = Buffer.byteLength(data);
-    const req = https.request({
-      hostname: 'owntown.fun', path, method, headers
-    }, (res) => {
+
+    const req = https.request({ hostname: 'owntown.fun', path, method, headers }, (res) => {
       let d = '';
       res.on('data', c => d += c);
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, data: JSON.parse(d) }); }
-        catch { resolve({ status: res.statusCode, data: d }); }
+        let parsed;
+        try { parsed = JSON.parse(d); } catch { parsed = d; }
+        if (res.statusCode >= 400) {            // surface HTTP errors
+          const err = new Error(`HTTP ${res.statusCode} ${method} ${path}`);
+          err.status = res.statusCode; err.body = parsed;
+          return reject(err);
+        }
+        resolve({ status: res.statusCode, data: parsed });
       });
     });
+
     req.on('error', reject);
+    req.setTimeout(timeoutMs, () => {           // don't hang forever
+      req.destroy(new Error(`Timeout ${timeoutMs}ms: ${method} ${path}`));
+    });
     if (data) req.write(data);
     req.end();
   });
@@ -939,8 +948,12 @@ function startBot() {
       if (d.balance !== undefined) stats.bankBalance = d.balance;
     });
 
+    const MAX_NOTIFICATIONS = 100;
     socket.on('notification:new', (d) => {
       notifications.push(d);
+      if (notifications.length > MAX_NOTIFICATIONS) {
+        notifications.splice(0, notifications.length - MAX_NOTIFICATIONS);
+      }
       stats.notifications++;
       if (d.type === 'pvp_challenge' || d.type === 'boss_spawn') {
         log(`🔔 Notif: ${d.type} — ${d.message || ''}`);
