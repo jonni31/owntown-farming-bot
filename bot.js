@@ -8,7 +8,7 @@
 
 const io = require('socket.io-client');
 const nacl = require('tweetnacl');
-const bs58 = require('bs58');
+const bs58 = require('bs58').default || require('bs58');
 const fs = require('fs');
 const https = require('https');
 
@@ -23,17 +23,18 @@ const market = new MarketAI();
 const state = new StateManager();
 const notifier = new Notifier();
 
+let _logWrites = 0;
 function log(msg) {
   const ts = new Date().toISOString().replace('T', ' ').substring(0, 19);
   const line = `[${ts}] ${msg}`;
   console.log(line);
-  // Append to log file
   try {
     fs.appendFileSync(cfg.log.file, line + '\n');
-    // Rotate if too big
-    const stat = fs.statSync(cfg.log.file);
-    if (stat.size > cfg.log.maxSizeMb * 1024 * 1024) {
-      fs.renameSync(cfg.log.file, cfg.log.file + '.old');
+    if (++_logWrites % 200 === 0) {            // cek rotasi berkala, bukan tiap baris
+      const stat = fs.statSync(cfg.log.file);
+      if (stat.size > cfg.log.maxSizeMb * 1024 * 1024) {
+        fs.renameSync(cfg.log.file, cfg.log.file + '.old');
+      }
     }
   } catch {}
 }
@@ -237,6 +238,8 @@ function isTokenExpired(tok) {
 }
 
 let token = getToken();
+let _authAttempts = 0;
+const MAX_AUTH_ATTEMPTS = 8;
 
 // ════════════════════════════════════════════
 // CRAFTING
@@ -858,11 +861,18 @@ function startBot() {
     try {
       if (!token || isTokenExpired(token)) {
         token = await authenticate();
+        _authAttempts = 0;
       }
     } catch(e) {
-      log(`❌ Auth error: ${e.message}`);
-      notifier.sendError(`Auth failed: ${e.message}`);
-      setTimeout(startBot, H.humanDelay(10000, 0.3, 0.1));
+      _authAttempts++;
+      log(`❌ Auth error (#${_authAttempts}): ${e.message}`);
+      notifier.sendError(`Auth gagal #${_authAttempts}: ${e.message}`);
+      if (_authAttempts >= MAX_AUTH_ATTEMPTS) {
+        log(`🛑 Auth gagal ${_authAttempts}x berturut — stop, butuh cek manual (wallet/file/token).`);
+        return; // jangan loop selamanya
+      }
+      const backoff = Math.min(5 * 60000, 10000 * Math.pow(2, _authAttempts - 1));
+      setTimeout(startBot, H.jitter(backoff, 0.2));
       return;
     }
 
@@ -1053,6 +1063,7 @@ function startBot() {
 
     socket.on('connect', () => {
       connected = true;
+      _authAttempts = 0;
       const now = Date.now();
       const timeSinceLastConnect = now - lastConnectTime;
       lastConnectTime = now;
