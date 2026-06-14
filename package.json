@@ -1,16 +1,21 @@
 {
-  "name": "ometown-farmer",
-  "version": "2.3.0",
-  "description": "Full-featured automated farming bot for Owntown.fun — mining, fishing, combat, PvP, property, marketplace, bank, crafting",
+  "name": "owntown-farmer-v25",
+  "version": "25.0.0",
+  "description": "Full-featured automated farming bot for Owntown.fun — Smart Market AI, Priority Farming, Enhanced Anti-Detection, Notifications",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js"
+    "start": "node bot.js",
+    "pm2": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop owntown-bot",
+    "pm2:logs": "pm2 logs owntown-bot",
+    "pm2:status": "pm2 status"
   },
   "dependencies": {
     "socket.io-client": "^4.7.0",
     "tweetnacl": "^1.0.3",
-    "bs58": "^5.0.0"
+    "bs58": "^5.0.0",
+    "dotenv": "^16.4.0"
   },
-  "keywords": ["owntown", "solana", "bot", "farming", "mmo", "pvp", "marketplace"],
+  "keywords": ["owntown", "solana", "bot", "farming", "market-ai", "anti-detection"],
   "license": "MIT"
 }
